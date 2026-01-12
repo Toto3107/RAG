@@ -1,0 +1,1 @@
+ (K8s) is an open-source container orchestration platform that automates the deployment, scaling, and management of containerized applications. In a DevOps context, it serves as the foundational platform for streamlining the entire software delivery lifecycle and enabling efficient collaboration between development and operations teams.
