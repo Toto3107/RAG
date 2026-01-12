@@ -1,53 +1,60 @@
 from fastapi import FastAPI
-from langchain_community.vectorstores import Chroma
-from langchain_ollama import OllamaEmbeddings, OllamaLLM
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
+import chromadb
+import ollama
+import os
+import logging 
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+
+MODEL_NAME = os.getenv("MODEL_NAME", "tinyllama")
+logging.info(f"Using model: {MODEL_NAME}")
+
 
 app = FastAPI()
+chroma = chromadb.PersistentClient(path="./db")
+collection = chroma.get_or_create_collection("docs")
 
-# 1. Initialize the embedding model
-embeddings = OllamaEmbeddings(model="tinyllama")
+@app.post("/query")
+def query(q: str):
+    results = collection.query(query_texts=[q], n_results=1)
+    context = results["documents"][0][0] if results["documents"] else ""
 
-# 2. Connect to the saved database
-vectorstore = Chroma(persist_directory="./db", embedding_function=embeddings)
-retriever = vectorstore.as_retriever()
+    answer = ollama.generate(
+    model=MODEL_NAME,
+    prompt=f"Context:\n{context}\n\nQuestion: {q}\n\nAnswer clearly and concisely:"
+    )
+    logging.info(f"/query asked: {q}")
+    logging.info(f"/add received new text (id will be generated)")
 
-# 3. Setup TinyLlama as our "Brain"
-llm = OllamaLLM(model="tinyllama")
+     
 
-# 4. Create a Prompt Template (Required for modern chains)
-# This tells the LLM how to handle the context it finds in the database.
-system_prompt = (
-    "You are an assistant for question-answering tasks. "
-    "Use the following pieces of retrieved context to answer the question. "
-    "If you don't know the answer, just say that you don't know. "
-    "\n\n"
-    "{context}"
-)
+    return {"answer": answer["response"]}
 
-prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", system_prompt),
-        ("human", "{input}"),
-    ]
-)
+@app.post("/add")
+def add_knowledge(text: str):
+    """Add new content to the knowledge base dynamically."""
+    try:
+        # Generate a unique ID for this document
+        import uuid
+        doc_id = str(uuid.uuid4())
 
-# 5. Build the modular RAG chain
-# First, create the chain that combines documents into the prompt
-question_answer_chain = create_stuff_documents_chain(llm, prompt)
+        # Add the text to Chroma collection
+        collection.add(documents=[text], ids=[doc_id])
 
-# Second, link the retriever to that chain
-rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+        return {
+            "status": "success",
+            "message": "Content added to knowledge base",
+            "id": doc_id
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
-@app.get("/query")
-async def query_ai(q: str):
-    # The modern chain expects a dictionary with the key "input"
-    response = rag_chain.invoke({"input": q})
-    
-    # The output contains the "answer", and also the "context" (source docs)
-    return {
-        "answer": response["answer"],
-        "sources_found": len(response["context"])
-    }
+@app.get("/health")
+def health():
+    return {"status": "ok"}
