@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rag-api
+  template:
+    metadata:
+      labels:
+        app: rag-api
+    spec:
+      volumes:
+      - name: data-storage
+        emptyDir: {}
+      initContainers:
+      - name: data-prepper
+        image: mayank3107/rag:rag-app
+        command: ["python", "embed.py"]
+        volumeMounts:
+        - name: data-storage
+          mountPath: /app/db
+      containers:
+      - name: rag-api
+        image: mayank3107/rag:rag-app
+        imagePullPolicy: Always
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8000
+        env:
+        - name: OLLAMA_HOST
+          value: "http://host.docker.internal:11434"
+        volumeMounts:
+        - name: data-storage
+          mountPath: /app/db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-service
+spec:
+  type: NodePort
+  selector:
+    app: rag-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30001
