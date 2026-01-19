@@ -1,0 +1,35 @@
+# Python environment
+venv/
+.venv/
+env/
+
+# Data and Databases
+# We ignore db/ because we usually want the container 
+# to build its own database or mount it as a volume
+db/
+*.sqlite3
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local text files (optional)
+# If you want to bake k8s.txt into the image, remove the line below
+# k8s.txt
+
+# Version Control
+.git
+.gitignore
+
+# IDEs and OS
+.vscode/
+.idea/
+.cursor/
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
